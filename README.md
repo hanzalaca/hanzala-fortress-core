@@ -49,6 +49,10 @@ python Scripts/vault_format_reference/open_vault.py --check-vectors
 
 All three implementations must open the same fixture vault and agree on every vector.
 
+## How it was built
+
+The author is a journalist, not a software engineer. This code, its tests and its documents were written with an AI coding assistant (Claude, by Anthropic), under the author's direction. That is one more reason it needs an independent human review before anyone relies on it.
+
 ## Licence
 
 Copyright (C) 2026 Hani, HANZALA FORTRESS.
@@ -63,4 +67,4 @@ Contributions are welcome under the terms in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## بالعربية
 
-هذا هو قلب التشفير في تطبيق HANZALA FORTRESS، وهو خزنة مشفّرة تعمل بدون إنترنت لحماية صور الصحفيين ومستنداتهم. نشرنا هذا الجزء علناً ليتمكن خبراء الأمن من فحصه. الكود لم تتم مراجعته بعد من جهة مستقلة. إذا وجدت مشكلة أمنية، راسلنا بحسب التعليمات في [SECURITY.md](SECURITY.md).
+هذا هو قلب التشفير في تطبيق HANZALA FORTRESS، وهو خزنة مشفّرة تعمل بدون إنترنت لحماية صور الصحفيين ومستنداتهم. نشرنا هذا الجزء علناً ليتمكن خبراء الأمن من فحصه. الكود كُتب بمساعدة أداة ذكاء اصطناعي، ولم تتم مراجعته بعد من جهة مستقلة. إذا وجدت مشكلة أمنية، راسلنا بحسب التعليمات في [SECURITY.md](SECURITY.md).
