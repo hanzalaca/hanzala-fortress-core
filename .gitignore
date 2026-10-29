@@ -1,0 +1,8 @@
+.build/
+.swiftpm/
+Package.resolved
+.gradle/
+build/
+__pycache__/
+*.pyc
+.DS_Store
