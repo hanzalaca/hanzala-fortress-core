@@ -1,0 +1,77 @@
+name: CodeQL
+
+# Public repository: code scanning and GitHub-hosted runners (macOS included) are
+# free here, so results upload to the Security tab instead of failing the run.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  schedule:
+    - cron: '41 6 * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: CodeQL (${{ matrix.language }})
+    if: github.event.pull_request.draft != true
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: swift
+            os: macos-latest
+            build: manual
+          - language: java-kotlin
+            os: ubuntu-latest
+            build: manual
+          - language: python
+            os: ubuntu-latest
+            build: none
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        if: matrix.language == 'java-kotlin'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Gradle
+        if: matrix.language == 'java-kotlin'
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build }}
+          queries: security-extended
+
+      - name: Build Swift core
+        if: matrix.language == 'swift'
+        run: swift build
+      - name: Build Kotlin vault core
+        if: matrix.language == 'java-kotlin'
+        working-directory: Android
+        # CodeQL only sees code the compiler actually runs on, so skip the build cache.
+        run: gradle :vault-core:compileKotlin :vault-core:compileTestKotlin --no-daemon --no-build-cache --rerun-tasks
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}
