@@ -1,0 +1,34 @@
+# Watches the libraries the encryption core depends on (swift-sodium, Kotlin,
+# kotlinx-serialization, the libsodium test bindings) and the CI actions.
+# Monthly and at most two open pull requests per ecosystem, so updates stay easy
+# to review. With "Dependabot security updates" on in Settings > Code security,
+# a fix for a vulnerable library is proposed as soon as an alert is raised,
+# whatever this schedule says.
+version: 2
+updates:
+  - package-ecosystem: "swift"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "security"
+
+  - package-ecosystem: "gradle"
+    directory: "/Android"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "security"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "security"
