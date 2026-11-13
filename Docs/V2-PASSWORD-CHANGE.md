@@ -7,7 +7,9 @@ are therefore untouched, and the Recovery Key keeps working.
 
 ## What is rewritten
 
-- Only slot 0, the visible slot. Bootstrap always writes the visible slot first.
+- Only slot 0, the visible slot. Bootstrap always writes the visible slot first,
+  and password unlock refuses a visible payload found in any other slot, so a
+  session opened with a password always has its visible slot at 0 (spec §14.2).
 - The new slot gets a fresh Argon2id salt and a fresh XChaCha20-Poly1305 nonce,
   with the default KDF parameters.
 - Slot 1 is copied byte for byte. In a visible-only vault it is the dummy slot;

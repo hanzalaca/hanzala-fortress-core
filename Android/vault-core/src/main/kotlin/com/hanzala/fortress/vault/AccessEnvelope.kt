@@ -87,6 +87,12 @@ class AccessKey(val role: AccessRole, val masterKey: ByteArray) : AutoCloseable 
     override fun close() = masterKey.wipe()
 }
 
+/**
+ * The role every envelope writer puts at each slot position. Assumes the fixed
+ * two-slot envelope (§4.1); revisit if the slot count ever changes.
+ */
+internal fun roleForSlot(index: Int): AccessRole = if (index == 0) AccessRole.VISIBLE else AccessRole.CONCEALED
+
 /** §4.2–§4.4 password unlock. */
 class SlotUnlocker(private val sodium: Sodium) {
     /**
@@ -97,12 +103,23 @@ class SlotUnlocker(private val sodium: Sodium) {
         val passwordBytes = password.toByteArray(Charsets.UTF_8)
         try {
             var kdfFailed = false
-            val matches = envelope.slots.mapNotNull {
-                try {
-                    unwrap(it, passwordBytes, envelope.vaultID)
+            // A payload must sit in its role's slot (visible at 0, concealed at 1),
+            // as every envelope is written. The slot order is not authenticated
+            // (§14.2): without this, swapped slots would still unlock, and a later
+            // password change would rewrite slot 0 and leave the old password
+            // working. A role in the wrong slot counts as a wrong password.
+            val matches = envelope.slots.mapIndexedNotNull { index, slot ->
+                val key = try {
+                    unwrap(slot, passwordBytes, envelope.vaultID)
                 } catch (e: KeyDerivationException) {
                     kdfFailed = true
                     null
+                }
+                if (key != null && key.role != roleForSlot(index)) {
+                    key.close()
+                    null
+                } else {
+                    key
                 }
             }
             if (matches.size != 1) {

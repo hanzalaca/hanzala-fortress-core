@@ -557,8 +557,19 @@ after V1.
    MUST hash the exact bytes it has and users should be warned.
 2. **Unauthenticated envelope fields.** `createdAt`, the slot order and the
    KDF parameters are not authenticated by anything except the fact that
-   wrong parameters derive a wrong key. Swapping slots or editing
-   `createdAt` is not detected. The slot payload binds only `vaultID`.
+   wrong parameters derive a wrong key. Editing `createdAt` is not
+   detected. The slot payload binds only `vaultID` and the role, so a
+   swapped slot order cannot be authenticated; instead, password unlock
+   only accepts a payload whose role matches its slot (visible in slot 0,
+   concealed in slot 1, as every writer creates them) and treats a role in
+   the wrong slot as a wrong password. Without that, swapped slots would
+   still unlock, and a later password change, which rewrites slot 0, would
+   leave the old visible slot and its password working in slot 1. A
+   swapped dual-access vault still loses its concealed path if the visible
+   password is then reset through the Recovery Key (the reset rewrites
+   slot 0, where the concealed slot now sits); that is a loss of
+   availability only, which anyone who can write the folder can cause
+   anyway.
 3. **No KDF lower bound on read.** Readers accept `operationsLimit ≥ 1`
    and any `memoryLimit` libsodium accepts. A slot can only be rewritten
    by someone holding the master key, so this is not a direct downgrade

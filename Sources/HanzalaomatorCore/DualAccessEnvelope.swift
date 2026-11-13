@@ -220,6 +220,14 @@ public final class DualAccessEnvelopeEngine {
     /// `vaultID`. A modified UUID is therefore treated like a wrong password or
     /// damaged envelope rather than silently redirecting recovery namespace
     /// derivation to a different identifier.
+    ///
+    /// A payload must also sit in its role's slot: the visible role in slot 0,
+    /// the concealed role in slot 1, which is how every envelope is created.
+    /// The slot order is not authenticated (spec §14.2), so without this check
+    /// someone who can write the folder could swap the slots: unlock would still
+    /// work, but a later password change would rewrite slot 0 and leave the old
+    /// visible slot, and the old password, in place. A role found in the wrong
+    /// slot is treated like a wrong password.
     public func unlock(
         envelope: DualAccessEnvelopeV2,
         password: String
@@ -234,7 +242,7 @@ public final class DualAccessEnvelopeEngine {
         var matches: [UnlockedVaultAccess] = []
         matches.reserveCapacity(DualAccessEnvelopeV2.fixedSlotCount)
 
-        for slot in envelope.accessSlots {
+        for (index, slot) in envelope.accessSlots.enumerated() {
             do {
                 let plaintext = try keyEngine.unwrapPayload(
                     slot.wrappedPayload,
@@ -245,6 +253,9 @@ public final class DualAccessEnvelopeEngine {
                     plaintext,
                     expectedVaultID: envelope.vaultID
                 )
+                guard decoded.role == Self.role(forSlotAt: index) else {
+                    continue
+                }
                 matches.append(decoded)
             } catch {
                 // Wrong passwords, damaged slots, malformed payloads, and public
@@ -305,6 +316,13 @@ public final class DualAccessEnvelopeEngine {
             throw DualAccessEnvelopeError.invalidPayload
         }
         return updated
+    }
+
+    /// The role every envelope writer puts at each slot position. Assumes the
+    /// fixed two-slot envelope; revisit if `fixedSlotCount` ever changes.
+    static func role(forSlotAt index: Int) -> VaultAccessRole {
+        precondition(DualAccessEnvelopeV2.fixedSlotCount == 2)
+        return index == 0 ? .visible : .concealed
     }
 
     private func makeSlot(

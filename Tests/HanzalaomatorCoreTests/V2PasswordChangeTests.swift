@@ -189,6 +189,50 @@ final class V2PasswordChangeTests: XCTestCase {
         lifecycle.lock()
     }
 
+    /// The slot order is not authenticated. If someone who can write the folder
+    /// swaps the slots, the visible slot sits in slot 1: it must not unlock, or
+    /// a later password change would rewrite slot 0 and leave the old password
+    /// working in slot 1.
+    func testSwappedSlotsDoNotUnlockAndCannotKeepAnOldPasswordAlive() throws {
+        let root = try makeRoot()
+        defer { try? fileManager.removeItem(at: root) }
+        let stores = makeStores()
+        let created = try stores.bootstrap.createVisibleOnly(
+            at: root,
+            password: "old-password-123",
+            budget: try budget()
+        )
+        let original = try stores.bootstrap.readEnvelope(at: root)
+        let swapped = DualAccessEnvelopeV2(
+            vaultID: original.vaultID,
+            createdAt: original.createdAt,
+            accessSlots: [original.accessSlots[1], original.accessSlots[0]]
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(swapped).write(
+            to: V2StorageLayout.accessEnvelopeURL(in: root),
+            options: .atomic
+        )
+
+        let lifecycle = V2VaultSessionLifecycle(sessionStore: stores.sessions)
+        XCTAssertThrowsError(try lifecycle.open(at: root, password: "old-password-123")) { error in
+            XCTAssertEqual(error as? DualAccessEnvelopeError, .invalidPasswordOrCorruptedEnvelope)
+        }
+
+        // Recovery still works, and the password set from it is the only one
+        // that opens the vault: the old visible slot left in slot 1 stays dead.
+        _ = try lifecycle.openRecovery(at: root, recoveryKey: try XCTUnwrap(created.visibleRecoveryKey))
+        try lifecycle.changePassword(to: "new-password-456")
+        lifecycle.lock()
+        _ = try lifecycle.open(at: root, password: "new-password-456")
+        lifecycle.lock()
+        XCTAssertThrowsError(try lifecycle.open(at: root, password: "old-password-123")) { error in
+            XCTAssertEqual(error as? DualAccessEnvelopeError, .invalidPasswordOrCorruptedEnvelope)
+        }
+    }
+
     func testConcealedSessionCannotChangeAPassword() throws {
         let root = try makeRoot()
         defer { try? fileManager.removeItem(at: root) }
