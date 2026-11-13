@@ -189,6 +189,25 @@ class WriterRoundTripTest {
     }
 
     @Test
+    fun swappedSlotsDoNotUnlockAndCannotKeepAnOldPasswordAlive() {
+        val created = writer(vault).createVault(password)
+        val envelopeFile = vault.resolve(V2Format.ENVELOPE_NAME)
+        val original = AccessEnvelope.parse(Files.readAllBytes(envelopeFile))
+        val swapped = AccessEnvelope(original.vaultID, original.createdAt, listOf(original.slots[1], original.slots[0]))
+        Files.write(envelopeFile, swapped.encode())
+
+        // The visible slot is now in slot 1, where it does not belong.
+        val reader = V2VaultReader(JvmSodium, vault)
+        assertFailsWith<VaultFormatException> { reader.unlock(password) }
+
+        // Recovery still works, and a new password set from it is the only one
+        // that opens the vault: the old visible slot left in slot 1 stays dead.
+        writer(vault).openSessionWithRecoveryKey(created.recoveryKey).use { it.changePassword("new password") }
+        reader.unlock("new password").use { assertEquals(original.vaultID, it.vaultID) }
+        assertFailsWith<VaultFormatException> { reader.unlock(password) }
+    }
+
+    @Test
     fun fixedCapacityKeepsThePoolShape() {
         val progress = ArrayList<Pair<Long, Long>>()
         val created = writer(vault).createVault(password, FixedCapacityPlan.MIN_CAPACITY) { done, total -> progress += done to total }

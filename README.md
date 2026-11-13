@@ -22,7 +22,7 @@ This repository holds the part that protects the files: the v2 vault format, its
 - **Offline only.** The core makes no network connections. There are no accounts and no servers.
 - **Standard, vetted primitives.** Argon2id for passwords, HKDF-SHA256 for key separation, XChaCha20-Poly1305 (libsodium) for encryption. No home-made cryptography.
 - **One file at a time.** Only the file being opened is decrypted. The vault is never decrypted as a whole.
-- **Fixed-size vaults.** A vault can be filled to a chosen size with random covers, so its size does not show how much is stored.
+- **Fixed-size vaults.** A vault can be filled to a chosen size with random covers, so its size does not show how much is stored. File timestamps are not hidden yet: every object written after the vault was filled gets a newer modification time, so someone who seizes a single copy can still estimate how much was added since (see `Docs/V2-FIXED-CAPACITY-POOL.md`).
 - **Recovery key.** A separate recovery key can open the vault if the password is lost.
 
 ## Build and test

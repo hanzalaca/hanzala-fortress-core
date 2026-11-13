@@ -141,10 +141,15 @@ metadata validation checks exactly that.
    - All new strings need both Arabic and English.
 2. **Second access path.** A visible-only vault's unused second metadata anchor
    stays small. Hidden access is out of V1, so this needs no change now.
-3. **Timestamps.** The objects that change show new modification times. Someone
-   comparing two copies of the device taken at different times can see how
-   many objects changed, though not how much is stored. Rewriting a few random
-   covers on each change would blur this and needs review.
+3. **Timestamps.** The objects that change show new modification times, and
+   one copy is enough to see it: every object written after the fill is newer
+   than the covers, so sorting `objects/` by modification time shows which
+   objects (and so roughly how much data) were added since the vault was
+   filled. Comparing two copies taken at different times shows more. Fixes to
+   review: set the modification and creation time of every pool file to one
+   value after each commit, and rewrite a few random covers on each change.
+   The change time (ctime) and inode order cannot be set by an app, so they
+   will still leak some ordering.
 4. **Cost.**
    - Filling writes the whole capacity once, which takes time and SSD wear,
      especially on an iPhone. That is why the user chooses the size.
