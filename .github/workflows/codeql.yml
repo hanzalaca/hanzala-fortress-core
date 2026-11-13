@@ -41,7 +41,7 @@ jobs:
             os: ubuntu-latest
             build: none
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Java
         if: matrix.language == 'java-kotlin'
