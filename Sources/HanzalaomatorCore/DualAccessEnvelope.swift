@@ -318,9 +318,11 @@ public final class DualAccessEnvelopeEngine {
         return updated
     }
 
-    /// The role every envelope writer puts at each slot position.
+    /// The role every envelope writer puts at each slot position. Assumes the
+    /// fixed two-slot envelope; revisit if `fixedSlotCount` ever changes.
     static func role(forSlotAt index: Int) -> VaultAccessRole {
-        index == 0 ? .visible : .concealed
+        precondition(DualAccessEnvelopeV2.fixedSlotCount == 2)
+        return index == 0 ? .visible : .concealed
     }
 
     private func makeSlot(

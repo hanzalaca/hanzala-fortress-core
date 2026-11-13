@@ -87,10 +87,13 @@ class AccessKey(val role: AccessRole, val masterKey: ByteArray) : AutoCloseable 
     override fun close() = masterKey.wipe()
 }
 
-/** §4.2–§4.4 password unlock. */
-/** The role every envelope writer puts at each slot position. */
+/**
+ * The role every envelope writer puts at each slot position. Assumes the fixed
+ * two-slot envelope (§4.1); revisit if the slot count ever changes.
+ */
 internal fun roleForSlot(index: Int): AccessRole = if (index == 0) AccessRole.VISIBLE else AccessRole.CONCEALED
 
+/** §4.2–§4.4 password unlock. */
 class SlotUnlocker(private val sodium: Sodium) {
     /**
      * Tries every slot (never stopping at the first match, §4.4). The password
