@@ -210,6 +210,7 @@ final class V2PasswordChangeTests: XCTestCase {
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        encoder.dateEncodingStrategy = .iso8601
         try encoder.encode(swapped).write(
             to: V2StorageLayout.accessEnvelopeURL(in: root),
             options: .atomic
