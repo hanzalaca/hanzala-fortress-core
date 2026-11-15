@@ -16,6 +16,7 @@ This repository holds the part that protects the files: the v2 vault format, its
 | `Scripts/vault_format_reference` | Independent Python reader written from the specification only |
 | `Docs/V2-VAULT-FORMAT-SPEC.md` | The vault format specification (frozen for version 1) |
 | `Docs/THREAT-MODEL.md` | What the vault protects against, and what it does not |
+| `Docs/AUDIT-SCOPE.md` | Scope and guide for an independent security review |
 
 ## Design in short
 
