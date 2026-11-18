@@ -1,0 +1,43 @@
+# Guard: the encryption core in this repository is a copy of the main app's
+# core. It must only change through the automatic sync pull request (branch
+# sync/from-hanzalaomator in this same repository). Any other pull request that
+# touches the core fails here, so the public copy can never drift from the code
+# that actually ships in the app.
+#
+# Found a bug? Thank you: please report it (SECURITY.md) or open the pull
+# request anyway; the fix is then applied in the main app and arrives here
+# through the sync.
+#
+# Cost: free (public repository, GitHub-hosted Linux, a few seconds).
+name: Mirror guard
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "Sources/HanzalaomatorCore/**"
+      - "Tests/HanzalaomatorCoreTests/**"
+      - "Android/vault-core/src/**"
+      - "Scripts/vault_format_reference/**"
+      - "Docs/V2-VAULT-FORMAT-SPEC.md"
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Allow only the automatic sync to change the core
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          THIS_REPO: ${{ github.repository }}
+        run: |
+          if [ "$HEAD_REF" = "sync/from-hanzalaomator" ] && [ "$HEAD_REPO" = "$THIS_REPO" ]; then
+            echo "This is the automatic sync from the main app. Allowed."
+            exit 0
+          fi
+          echo "::error::This pull request changes the encryption core directly. The core is copied automatically from the main app, so the change must be made there first. It will then arrive here through the sync pull request."
+          exit 1
