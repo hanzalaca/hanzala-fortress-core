@@ -11,6 +11,8 @@ public enum DomainKeyPurpose: String, Sendable {
     case namespaceV2 = "hanzala/namespace/v2"
     case recoveryNamespaceV2 = "hanzala/recovery-namespace/v2"
     case poolObjectV2 = "hanzala/pool-object/v2"
+    /// Device-local only (`V2MetadataWatermarkGuard`); never written to a vault.
+    case metadataWatermarkV2 = "hanzala/metadata-watermark/v2"
 }
 
 public struct DomainKeyDeriver: Sendable {

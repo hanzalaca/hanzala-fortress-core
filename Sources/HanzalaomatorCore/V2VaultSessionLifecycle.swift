@@ -109,9 +109,17 @@ public final class V2VaultSessionLifecycle {
     /// concealed-mode selector: the password selects the slot inside the generic
     /// v2 envelope.
     @discardableResult
-    public func open(at root: URL, password: String) throws -> V2VaultLifecycleOpenResult {
+    public func open(
+        at root: URL,
+        password: String,
+        acceptingOlderCopy: Bool = false
+    ) throws -> V2VaultLifecycleOpenResult {
         try performOpen {
-            try sessionStore.openSession(at: root, password: password)
+            try sessionStore.openSession(
+                at: root,
+                password: password,
+                acceptingOlderCopy: acceptingOlderCopy
+            )
         }
     }
 
@@ -121,12 +129,14 @@ public final class V2VaultSessionLifecycle {
     @discardableResult
     public func openRecovery(
         at root: URL,
-        recoveryKey: String
+        recoveryKey: String,
+        acceptingOlderCopy: Bool = false
     ) throws -> V2VaultLifecycleOpenResult {
         try performOpen {
             try recoverySessionCoordinator.openSession(
                 at: root,
-                recoveryKey: recoveryKey
+                recoveryKey: recoveryKey,
+                acceptingOlderCopy: acceptingOlderCopy
             )
         }
     }

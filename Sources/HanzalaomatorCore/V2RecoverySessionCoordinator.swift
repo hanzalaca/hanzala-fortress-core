@@ -37,7 +37,8 @@ public final class V2RecoverySessionCoordinator {
     /// failure behavior defined by `V2VaultBootstrapStore.openRecoveryAccess`.
     public func openSession(
         at root: URL,
-        recoveryKey: String
+        recoveryKey: String,
+        acceptingOlderCopy: Bool = false
     ) throws -> V2OpenedVaultSession {
         let opened = try bootstrapStore.openRecoveryAccess(
             at: root,
@@ -53,6 +54,12 @@ public final class V2RecoverySessionCoordinator {
             envelopeBinding: binding
         )
 
+        // Same freshness rule as a password open, before any recovery work.
+        try sessionStore.checkFreshness(
+            opened.metadata.generation,
+            for: session,
+            accepting: acceptingOlderCopy
+        )
         let recovery = try sessionStore.recover(session: session)
         // Re-enter the normal public session boundary once more after recovery.
         // This repeats envelope/access identity validation before publishing the

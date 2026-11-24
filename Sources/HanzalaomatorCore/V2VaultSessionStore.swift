@@ -15,6 +15,10 @@ public enum V2VaultSessionError: Error, Equatable, Sendable {
     /// Fixed capacity was asked for a vault that already holds files, or with
     /// a different size than the one it was created with.
     case fixedCapacityUnavailable
+    /// The vault folder holds an older version of this access path than this
+    /// device has already opened (a restored backup, or someone put an old
+    /// copy back). Opening it anyway is the owner's choice.
+    case olderCopyDetected
 }
 
 /// What a fixed-capacity vault looks like to the app. Only ever built from
@@ -133,6 +137,7 @@ public final class V2VaultSessionStore {
     private let removalCoordinator: V2RemovalTransactionCoordinator
     private let physicalCapacityGuard: V2PhysicalCapacityGuard
     private let maximumReadLength: Int
+    private let watermarkGuard: V2MetadataWatermarkGuard?
 
     /// Internal deterministic seam used only by core tests to replace a source
     /// pathname after the no-follow descriptor has been opened. Production
@@ -148,11 +153,13 @@ public final class V2VaultSessionStore {
         chunkOwnershipCoordinator: V2ChunkOwnershipTransactionCoordinator? = nil,
         removalCoordinator: V2RemovalTransactionCoordinator? = nil,
         physicalCapacityGuard: V2PhysicalCapacityGuard = V2PhysicalCapacityGuard(),
-        maximumReadLength: Int = V2VaultSessionStore.defaultMaximumReadLength
+        maximumReadLength: Int = V2VaultSessionStore.defaultMaximumReadLength,
+        metadataWatermarkStore: V2MetadataWatermarkStore? = nil
     ) {
         precondition(maximumReadLength > 0)
         self.bootstrapStore = bootstrapStore
         self.metadataStore = metadataStore
+        self.watermarkGuard = metadataWatermarkStore.map { V2MetadataWatermarkGuard(store: $0) }
         self.objectStore = objectStore
         self.physicalCapacityGuard = physicalCapacityGuard
         self.maximumReadLength = maximumReadLength
@@ -179,9 +186,15 @@ public final class V2VaultSessionStore {
     /// Opens one password-selected access path and completes authenticated crash
     /// recovery before returning a usable session. Malformed/wrong-key pending
     /// objects fail closed; no session is returned in that case.
+    ///
+    /// With a watermark store, a vault older than the newest version this
+    /// device has opened throws `olderCopyDetected` before any recovery work
+    /// runs. `acceptingOlderCopy` is the owner's explicit "open it anyway": that
+    /// copy then becomes the reference.
     public func openSession(
         at root: URL,
-        password: String
+        password: String,
+        acceptingOlderCopy: Bool = false
     ) throws -> V2OpenedVaultSession {
         let opened = try bootstrapStore.openAccess(at: root, password: password)
         let binding = try canonicalEnvelopeData(opened.envelope)
@@ -194,9 +207,35 @@ public final class V2VaultSessionStore {
             envelopeBinding: binding
         )
 
+        // Before recovery: a stale anchor's pending lists must not drive it.
+        try checkFreshness(
+            opened.metadata.generation,
+            for: session,
+            accepting: acceptingOlderCopy
+        )
         let recovery = try recover(session: session)
         _ = try validatedMetadata(for: session)
         return V2OpenedVaultSession(session: session, recovery: recovery)
+    }
+
+    /// Compares `generation` with this device's watermark for the session's
+    /// access path. A no-op without a watermark store.
+    func checkFreshness(
+        _ generation: UInt64,
+        for session: V2VaultSession,
+        accepting: Bool
+    ) throws {
+        guard let watermarkGuard else { return }
+        let key = try watermarkGuard.key(
+            masterKey: session.masterKey,
+            vaultID: session.vaultID,
+            accessID: session.accessID
+        )
+        if accepting {
+            watermarkGuard.accept(generation, key: key)
+        } else {
+            try watermarkGuard.check(generation, key: key)
+        }
     }
 
     /// Changes the password of a visible access path. Only the public
@@ -710,6 +749,9 @@ public final class V2VaultSessionStore {
         guard metadata.accessID == session.accessID else {
             throw V2VaultSessionError.accessIdentityChanged
         }
+        // Every reload: an old anchor put back while the vault is open is
+        // caught too, and each newer generation raises the watermark.
+        try checkFreshness(metadata.generation, for: session, accepting: false)
         return metadata
     }
 
