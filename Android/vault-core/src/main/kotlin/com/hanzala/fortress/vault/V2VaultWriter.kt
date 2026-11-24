@@ -69,13 +69,22 @@ class V2VaultWriter internal constructor(
     private val kdf: KdfParameters,
     availableSpace: AvailableSpaceProvider,
     faultInjector: FaultInjector?,
+    watermarks: MetadataWatermarkStore? = null,
 ) {
+    /**
+     * With [watermarks], opening refuses a vault older than one this device
+     * already opened ([OlderCopyDetectedException]) unless the caller passes
+     * `acceptingOlderCopy = true`.
+     */
     constructor(
         sodium: Sodium,
         root: Path,
         kdf: KdfParameters = KdfParameters.PRODUCTION,
         availableSpace: AvailableSpaceProvider = AvailableSpaceProvider.SYSTEM,
-    ) : this(sodium, root, kdf, availableSpace, null)
+        watermarks: MetadataWatermarkStore? = null,
+    ) : this(sodium, root, kdf, availableSpace, null, watermarks)
+
+    private val watermarkGuard = watermarks?.let { MetadataWatermarkGuard(it) }
 
     private val committer = DurableFileCommitter(faultInjector)
     private val store = PoolObjectStore(sodium, root, committer)
@@ -121,29 +130,40 @@ class V2VaultWriter internal constructor(
     }
 
     /** §4.4 unlock, then crash recovery of pending work (§8.3 step 3). */
-    fun openSession(password: String): V2VaultSession {
+    fun openSession(password: String, acceptingOlderCopy: Boolean = false): V2VaultSession {
         val envelope = AccessEnvelope.parse(readEnvelopeBytes())
         val key = SlotUnlocker(sodium).unlock(envelope, password)
-        return open(envelope, key, expectedAccessID = null)
+        return open(envelope, key, expectedAccessID = null, acceptingOlderCopy)
     }
 
     /** §7 recovery-key open; every credential failure is "invalid recovery key". */
-    fun openSessionWithRecoveryKey(recoveryKey: String): V2VaultSession {
+    fun openSessionWithRecoveryKey(recoveryKey: String, acceptingOlderCopy: Boolean = false): V2VaultSession {
         val envelope = AccessEnvelope.parse(readEnvelopeBytes())
         val (key, accessID) = V2VaultReader(sodium, root).recoverAccess(envelope, recoveryKey)
         return try {
-            open(envelope, key, accessID)
+            open(envelope, key, accessID, acceptingOlderCopy)
         } catch (e: VaultFormatException) {
             throw VaultFormatException("invalid recovery key")
         }
     }
 
-    private fun open(envelope: AccessEnvelope, key: AccessKey, expectedAccessID: UUID?): V2VaultSession {
+    private fun open(
+        envelope: AccessEnvelope,
+        key: AccessKey,
+        expectedAccessID: UUID?,
+        acceptingOlderCopy: Boolean = false,
+    ): V2VaultSession {
         val session = try {
             val metadata = metadataStore.read(key.masterKey)
             if (expectedAccessID != null && metadata.accessID != expectedAccessID) {
                 throw VaultFormatException("recovery anchor does not match metadata")
             }
+            // Before crash recovery writes anything: an older copy is refused untouched.
+            watermarkGuard?.check(
+                metadata.generation,
+                MetadataWatermarkGuard.key(key.masterKey, envelope.vaultID, metadata.accessID),
+                acceptingOlderCopy,
+            )
             session(envelope.vaultID, metadata.accessID, key.role, key.masterKey.copyOf(), envelope.encode())
         } finally {
             key.close()
@@ -315,6 +335,7 @@ class V2VaultWriter internal constructor(
     internal val sodiumForSessions get() = sodium
     internal val rootForSessions get() = root
     internal val metadataForSessions get() = metadataStore
+    internal val watermarksForSessions get() = watermarkGuard
     internal val transactionsForSessions get() = transactions
     internal val coversForSessions get() = covers
     internal val guardForSessions get() = guard
@@ -351,6 +372,8 @@ class V2VaultSession internal constructor(
 ) : AutoCloseable {
     private var closed = false
     private val metadataStore get() = writer.metadataForSessions
+    private val watermarkKey: String? =
+        if (writer.watermarksForSessions != null) MetadataWatermarkGuard.key(key, vaultID, accessID) else null
     private val transactions get() = writer.transactionsForSessions
 
     /** What crash recovery did when this session opened. */
@@ -561,6 +584,9 @@ class V2VaultSession internal constructor(
         }
         val metadata = metadataStore.read(key)
         if (metadata.accessID != accessID) throw SessionInvalidatedException("access identity changed")
+        // Every reload: remembers each newer generation, and notices an older
+        // copy put back while the vault is open.
+        watermarkKey?.let { writer.watermarksForSessions?.check(metadata.generation, it, accepting = false) }
         return metadata
     }
 
